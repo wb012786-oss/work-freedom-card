@@ -33,3 +33,11 @@ coverage/
 TODO.md
 NOTES.md
 *.bak 
+
+# 后端本地数据与依赖（不要推到 GitHub）
+backend/node_modules/
+backend/data.json
+backend/package-lock.json
+
+# 可选：若根目录也有 lock 且不想提交
+# package-lock.json

@@ -1,0 +1,20 @@
+{
+  "name": "work-freedom-card-backend",
+  "version": "2.1.0",
+  "description": "工人解压卡后端：bcryptjs + Token过期刷新 + 登录限流",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts"
+  },
+  "dependencies": {
+    "@hono/node-server": "^1.13.1",
+    "bcryptjs": "^2.4.3",
+    "hono": "^4.6.3"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "tsx": "^4.19.1",
+    "typescript": "^5.6.3"
+  }
+}

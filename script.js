@@ -13,6 +13,20 @@
  */
 "use strict";
 
+// ========== 云同步配置（阶段二） ==========
+/* window.USER_TOKEN = localStorage.getItem("user_token") || null;
+window.USER_ID = localStorage.getItem("user_id") || "usr_" + Date.now();
+window.API_BASE = "http://localhost:3001"; */
+// ========== 云同步 + 登录配置（替换原写死 Token 段） ==========
+//window.API_BASE = "http://localhost:3001";  本地地址
+window.API_BASE =
+  location.hostname === "localhost" || location.hostname === "127.0.0.1"
+    ? "http://localhost:3001"
+    : "https://你的后端域名.up.railway.app"; // 部署后端后换成真实地址
+window.USER_TOKEN = localStorage.getItem("user_token") || null;
+window.USER_ID = localStorage.getItem("user_id") || null;
+// =========================================
+
 // --- 執行狀態管理 ---
 let isSavingEvent = false;
 let isInitialized = false;
@@ -35,6 +49,125 @@ let handwriteFonts = [
   "font-handwrite-5",
   "font-handwrite-6",
 ];
+// ---------- 登录 UI 逻辑 ----------
+let authMode = "login"; // login | register
+
+function openAuthModal() {
+  document.getElementById("authModal")?.classList.remove("hidden");
+  setAuthMode("login");
+}
+ 
+function closeAuthModal() {
+  document.getElementById("authModal")?.classList.add("hidden");
+  document.getElementById("authError")?.classList.add("hidden");
+  document.getElementById("authSuccess")?.classList.add("hidden");
+}
+ 
+function setAuthMode(mode) {
+  authMode = mode;
+  const title = document.getElementById("authTitle");
+  const nick = document.getElementById("authNickname");
+  const submit = document.getElementById("authSubmit");
+  const tabLogin = document.getElementById("tabLogin");
+  const tabRegister = document.getElementById("tabRegister");
+ 
+  if (mode === "login") {
+    if (title) title.textContent = "登录";
+    if (nick) nick.classList.add("hidden");
+    if (submit) submit.textContent = "登录";
+    tabLogin?.classList.add("bg-blue-500", "text-white");
+    tabLogin?.classList.remove("bg-gray-100", "text-gray-600");
+    tabRegister?.classList.add("bg-gray-100", "text-gray-600");
+    tabRegister?.classList.remove("bg-blue-500", "text-white");
+  } else {
+    if (title) title.textContent = "注册";
+    if (nick) nick.classList.remove("hidden");
+    if (submit) submit.textContent = "注册";
+    tabRegister?.classList.add("bg-blue-500", "text-white");
+    tabRegister?.classList.remove("bg-gray-100", "text-gray-600");
+    tabLogin?.classList.add("bg-gray-100", "text-gray-600");
+    tabLogin?.classList.remove("bg-blue-500", "text-white");
+  }
+}
+ 
+async function handleAuthSubmit() {
+  const email = document.getElementById("authEmail")?.value.trim() || "";
+  const password = document.getElementById("authPassword")?.value || "";
+  const nickname = document.getElementById("authNickname")?.value.trim() || "打工人";
+  const errEl = document.getElementById("authError");
+  const okEl = document.getElementById("authSuccess");
+ 
+  errEl?.classList.add("hidden");
+  okEl?.classList.add("hidden");
+ 
+  if (!email || !password) {
+    if (errEl) { errEl.textContent = "请填写邮箱和密码"; errEl.classList.remove("hidden"); }
+    return;
+  }
+ 
+  const url = authMode === "login"
+    ? `${window.API_BASE}/api/v1/auth/login`
+    : `${window.API_BASE}/api/v1/auth/register`;
+ 
+  const body = authMode === "login"
+    ? { email, password }
+    : { email, password, nickname };
+ 
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    const result = await res.json();
+    if (!res.ok) {
+      if (errEl) { errEl.textContent = result.error || "操作失败"; errEl.classList.remove("hidden"); }
+      return;
+    }
+ 
+    // 存 Token
+    localStorage.setItem("user_token", result.token);
+    localStorage.setItem("user_id", result.user_id);
+    localStorage.setItem("user_email", result.email || email);
+    localStorage.setItem("user_nickname", result.nickname || nickname);
+    window.USER_TOKEN = result.token;
+    window.USER_ID = result.user_id;
+ 
+    if (okEl) { okEl.textContent = result.message || "成功"; okEl.classList.remove("hidden"); }
+    updateAuthButton();
+    // 登录成功后从云端拉数据
+    await pullCloudEvents();
+    setTimeout(() => closeAuthModal(), 800);
+  } catch (e) {
+    if (errEl) { errEl.textContent = "网络错误，请确认后端已启动"; errEl.classList.remove("hidden"); }
+  }
+}
+ 
+function updateAuthButton() {
+  const btn = document.getElementById("authOpenBtn");
+  if (!btn) return;
+  if (window.USER_TOKEN) {
+    const name = localStorage.getItem("user_nickname") || localStorage.getItem("user_email") || "已登录";
+    btn.textContent = name;
+    btn.classList.remove("bg-blue-500", "hover:bg-blue-600");
+    btn.classList.add("bg-gray-500");
+  } else {
+    btn.textContent = "登录 / 注册";
+    btn.classList.add("bg-blue-500", "hover:bg-blue-600");
+    btn.classList.remove("bg-gray-500");
+  }
+}
+ 
+function logout() {
+  localStorage.removeItem("user_token");
+  localStorage.removeItem("user_id");
+  localStorage.removeItem("user_email");
+  localStorage.removeItem("user_nickname");
+  window.USER_TOKEN = null;
+  window.USER_ID = null;
+  updateAuthButton();
+  alert("已退出登录");
+}
 
 // --- 應用程式核心初始化 ---
 function initializeApplication() {
@@ -498,10 +631,10 @@ const ACHIEVEMENT_DEFINITIONS = {
     rarity: "rare",
   },
   annoyance_king: {
-    name: "厭世之王",
-    description: "厭世指數達到500",
+    name: "高压达人",
+    description: "压力指數達到500",
     icon: '<i class="fas fa-crown text-purple-500"></i>',
-    category: "厭世",
+    category: "压力",
     condition: (data) => data.totalAnnoyance >= 500,
     animation: "sparkle",
     rarity: "epic",
@@ -582,11 +715,12 @@ const moodColors = {
   burnout: { bg: "rgba(239, 68, 68, 0.2)", border: "#ef4444" },
   annoying: { bg: "rgba(99, 102, 241, 0.2)", border: "#6366f1" },
   stuck: { bg: "rgba(107, 114, 128, 0.2)", border: "#6b7280" },
-  bad: { bg: "rgba(34, 197, 94, 0.2)", border: "#22c55e" },
+  //bad: { bg: "rgba(34, 197, 94, 0.2)", border: "#22c55e" },
+  bad: { bg: "rgba(59, 130, 246, 0.2)", border: "#3b82f6" }, // 心态崩了，与格子蓝色一致
   bullying: { bg: "rgba(234, 88, 12, 0.2)", border: "#ea580c" },
 };
 
-// --- 擴充後的厭世指數關鍵字庫 ---
+// --- 擴充後的压力指數關鍵字庫 ---
 const annoyanceKeywords = new Map([
   // 強烈髒話 (10分)
   ["幹你娘", 10],
@@ -1006,6 +1140,162 @@ function saveData() {
     console.error("儲存資料失敗:", e);
   }
 }
+
+// ---------- 云同步：保存事件 ----------
+async function saveMoodEvent(eventData) {
+  // 本地备份
+  try {
+    let localData = JSON.parse(localStorage.getItem("work_freedom_data") || "{}");
+    localData.events = localData.events || [];
+    localData.events.push({ ...eventData, syncedAt: new Date().toISOString() });
+    localStorage.setItem("work_freedom_data", JSON.stringify(localData));
+  } catch (e) {
+    console.warn("本地额外备份失败", e);
+  }
+ 
+  if (!window.USER_TOKEN) return; // 未登录只本地
+ 
+  try {
+    const res = await fetch(`${window.API_BASE}/api/v1/mood/events`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${window.USER_TOKEN}`,
+      },
+      body: JSON.stringify({
+        category_code: eventData.mood,
+        score: eventData.score || 1,
+        note: eventData.description || "",
+        date: eventData.date || undefined,
+      }),
+    });
+    if (res.ok) {
+      const result = await res.json();
+      console.log("✅ 云端同步成功", result);
+    } else if (res.status === 401) {
+      console.warn("Token 失效，请重新登录");
+      logout();
+    } else {
+      console.warn("云端同步失败", res.status);
+    }
+  } catch (err) {
+    console.warn("云端同步失败，仅本地保存", err);
+  }
+}
+ 
+// ---------- 云同步：登录后拉取并合并到本地 ----------
+async function pullCloudEvents() {
+  if (!window.USER_TOKEN) return;
+ 
+  try {
+    const res = await fetch(`${window.API_BASE}/api/v1/mood/events`, {
+      headers: { Authorization: `Bearer ${window.USER_TOKEN}` },
+    });
+    if (!res.ok) {
+      if (res.status === 401) logout();
+      return;
+    }
+    const { events } = await res.json();
+    if (!events || !events.length) {
+      console.log("云端暂无数据");
+      return;
+    }
+ 
+    // 合并策略：按 date + mood + note 去重，云端有而本地没有的写入 filledDates
+    let added = 0;
+    events.forEach((ev) => {
+      const dateStr = (ev.recordedAt || "").slice(0, 10);
+      if (!dateStr) return;
+ 
+      // 找一个空格子或已有同日期格子
+      let targetIndex = null;
+      for (const [idx, data] of filledDates.entries()) {
+        if (data.date === dateStr && data.mood === ev.categoryCode) {
+          targetIndex = idx; // 已有，跳过新增
+          break;
+        }
+      }
+      if (targetIndex !== null) return;
+ 
+      // 找第一个空格子
+      for (let i = 0; i < TOTAL_CELLS; i++) {
+        if (!filledDates.has(i)) {
+          targetIndex = i;
+          break;
+        }
+      }
+      if (targetIndex === null) return;
+ 
+      const record = {
+        date: dateStr,
+        displayDate: dateStr.slice(5).replace("-", "/"),
+        mood: ev.categoryCode,
+        description: ev.note || "",
+        timestamp: ev.recordedAt,
+        annoyanceIndex: 0,
+        fontStyle: handwriteFonts[Math.floor(Math.random() * handwriteFonts.length)],
+      };
+      filledDates.set(targetIndex, record);
+      const cell = document.querySelector(`[data-index="${targetIndex}"]`);
+      if (cell) fillCell(cell, record);
+      added++;
+    });
+ 
+    if (added > 0) {
+      saveData();
+      updateAllStats();
+      console.log(`✅ 已从云端合并 ${added} 条记录`);
+      alert(`已从云端同步 ${added} 条记录到本地`);
+    }
+  } catch (err) {
+    console.warn("拉取云端数据失败", err);
+  }
+}
+
+// ========== 双模式保存（本地 + 云端） ==========
+/* async function saveMoodEvent(eventData) {
+  // 1. 本地 LocalStorage 优先写入（兼容原有逻辑）
+  try {
+    let localData = JSON.parse(localStorage.getItem("work_freedom_data") || "{}");
+    localData.events = localData.events || [];
+    localData.events.push({
+      ...eventData,
+      syncedAt: new Date().toISOString(),
+    });
+    localStorage.setItem("work_freedom_data", JSON.stringify(localData));
+  } catch (e) {
+    console.warn("本地额外备份失败", e);
+  }
+
+  // 2. 如果有 Token，异步同步到云端
+  if (window.USER_TOKEN) {
+    try {
+      const res = await fetch(`${window.API_BASE}/api/v1/mood/events`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${window.USER_TOKEN}`,
+        },
+        body: JSON.stringify({
+          user_id: window.USER_ID,
+          category_code: eventData.mood, // 对应前端的 mood 字段
+          score: eventData.score || 1,
+          note: eventData.description || "",
+        }),
+      });
+
+      if (res.ok) {
+        const result = await res.json();
+        console.log("✅ 云端同步成功", result);
+        // 可选：在页面上显示同步成功提示
+      } else {
+        console.warn("云端同步失败，状态码：", res.status);
+      }
+    } catch (err) {
+      console.warn("云端同步失败，仅本地保存", err);
+    }
+  }
+} */
 
 // --- 成就系統 ---
 function loadAchievements() {
@@ -1435,6 +1725,8 @@ function handleQuickMark(index, cell) {
     if (filledDates.size === TOTAL_CELLS) {
       setTimeout(() => createFireworks(), 500);
     }
+	// ↓↓↓ 新增这一行（只在新增时同步） ↓↓↓
+    saveMoodEvent(data);
   }
   saveData();
   updateAllStats();
@@ -1752,6 +2044,8 @@ function updateEventData(index, eventData) {
 
     // 儲存至localStorage
     saveData();
+	// ↓↓↓ 新增这一行（云同步） ↓↓↓
+	saveMoodEvent(eventData);
 
     console.log("事件資料更新完成");
   } catch (error) {
@@ -1800,7 +2094,7 @@ function updateUserInterface() {
   }, 50);
 }
 
-// --- 爛事標籤 & 厭世指數 ---
+// --- 爛事標籤 & 压力指數 ---
 function renderPresetButtons() {
   const container = document.getElementById("presetButtonsContainer");
   container.innerHTML = customPresets
@@ -1841,7 +2135,7 @@ function calculateAnnoyanceIndex(text) {
 
 function showAnnoyanceFeedback(score) {
   const feedbackEl = document.getElementById("annoyanceFeedback");
-  feedbackEl.textContent = `厭世+${score}`;
+  feedbackEl.textContent = `压力+${score}`;
   feedbackEl.classList.remove("hidden");
   setTimeout(() => feedbackEl.classList.add("hidden"), 1900);
 }
@@ -1924,17 +2218,17 @@ function updateRecentRecords() {
   // 心情名稱映射
   const getMoodName = (mood) => {
     const moodNames = {
-      money: "錢途茫茫",
-      burnout: "身心俱疲",
-      annoying: "鳥事一堆",
-      stuck: "缺乏成長",
-      bad: "破爛心情",
-      bullying: "職場霸凌",
+      money: "画饼大师",
+      burnout: "精力透支",
+      annoying: "甩锅现场",
+      stuck: "原地踏步",
+      bad: "心态崩了",
+      bullying: "职场霸凌",
     };
     return moodNames[mood] || "未知心情";
   };
 
-  // 獲取厭世分數顏色
+  // 獲取压力分數顏色
   const getScoreColor = (score) => {
     if (score >= 8) return "bg-red-100 text-red-700";
     if (score >= 5) return "bg-orange-100 text-orange-700";
@@ -1987,6 +2281,97 @@ function updateRecentRecords() {
 }
 
 function updateAnnoyanceStats() {
+  // ========== 手册公式：压力指数 = (当前点数 / 100) * 80 + 近3天增量 * 4 ==========
+  const currentPoints = filledDates.size; // 当前点数（已填格子数）
+
+  // 计算近 3 天增量
+  const now = new Date();
+  const threeDaysAgo = new Date(now);
+  threeDaysAgo.setDate(now.getDate() - 3);
+  const threeDaysAgoStr = toLocalDateStr(threeDaysAgo);
+
+  let recentIncrement = 0;
+  filledDates.forEach((d) => {
+    if (d.date && d.date >= threeDaysAgoStr) {
+      recentIncrement += 1; // 每条近 3 天记录算 1 点增量
+    }
+  });
+
+  // 手册公式
+  let disgustIndex = (currentPoints / 100) * 80 + recentIncrement * 4;
+  // 限制在 0–100，避免超出
+  disgustIndex = Math.min(100, Math.max(0, Number(disgustIndex.toFixed(1))));
+
+  // 关键词统计（仍用于「主要压力来源」和关键词云，不参与总指数）
+  const counts = new Map();
+  const allWords = new Map();
+  filledDates.forEach((d) => {
+    if (d.description) {
+      const words = d.description.toLowerCase().split(/\s+/);
+      words.forEach((word) => {
+        if (word.length >= 2) {
+          allWords.set(word, (allWords.get(word) || 0) + 1);
+          if (annoyanceKeywords.has(word)) {
+            counts.set(word, (counts.get(word) || 0) + 1);
+          }
+        }
+      });
+      Array.from(annoyanceKeywords.keys()).forEach((keyword) => {
+        if (
+          keyword.includes(" ") &&
+          d.description.toLowerCase().includes(keyword)
+        ) {
+          counts.set(keyword, (counts.get(keyword) || 0) + 1);
+        }
+      });
+    }
+  });
+
+  // 更新页面显示
+  const totalEl = document.getElementById("annoyanceIndexTotal");
+  if (totalEl) totalEl.textContent = disgustIndex;
+
+  const levelEl = document.getElementById("annoyanceLevel");
+  if (levelEl) {
+    levelEl.textContent =
+      disgustIndex >= 80
+        ? "高压预警"
+        : disgustIndex >= 60
+        ? "偏高压力"
+        : disgustIndex >= 40
+        ? "中度压力"
+        : disgustIndex >= 20
+        ? "轻度压力"
+        : "内心毫无波澜";
+  }
+
+  // 更新压力来源列表
+  const topKeywords = Array.from(counts.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5);
+  const keywordsContainer = document.getElementById("topAnnoyanceKeywords");
+  if (keywordsContainer) {
+    if (topKeywords.length > 0) {
+      keywordsContainer.innerHTML = topKeywords
+        .map(
+          ([k, c]) => `<li class="flex justify-between items-center py-1">
+              <span class="text-neutral-700">${k}</span>
+              <span class="text-sm text-neutral-500">${c} 次</span>
+            </li>`
+        )
+        .join("");
+    } else {
+      keywordsContainer.innerHTML =
+        '<li class="text-neutral-400 text-sm">尚无足够数据</li>';
+    }
+  }
+
+  // 可选：把关键词云相关逻辑保留（若页面有对应容器）
+  // 原有 allWords 逻辑可按需继续使用
+  generateKeywordCloud(allWords);
+}
+
+/* function updateAnnoyanceStats() {
   let total = 0;
   const counts = new Map();
   const allWords = new Map(); // 用於關鍵字雲
@@ -2045,7 +2430,7 @@ function updateAnnoyanceStats() {
   }
   // 生成關鍵字雲
   generateKeywordCloud(allWords);
-}
+} */
 
 // 生成關鍵字雲
 function generateKeywordCloud(wordMap) {
@@ -2112,42 +2497,42 @@ function initChart() {
       labels: [],
       datasets: [
         {
-          label: "錢途茫茫",
+          label: "画饼大师",
           borderColor: moodColors.money.border,
           backgroundColor: moodColors.money.bg,
           fill: true,
           tension: 0.4,
         },
         {
-          label: "身心俱疲",
+          label: "精力透支",
           borderColor: moodColors.burnout.border,
           backgroundColor: moodColors.burnout.bg,
           fill: true,
           tension: 0.4,
         },
         {
-          label: "鳥事一堆",
+          label: "甩锅现场",
           borderColor: moodColors.annoying.border,
           backgroundColor: moodColors.annoying.bg,
           fill: true,
           tension: 0.4,
         },
         {
-          label: "缺乏成長",
+          label: "原地踏步",
           borderColor: moodColors.stuck.border,
           backgroundColor: moodColors.stuck.bg,
           fill: true,
           tension: 0.4,
         },
         {
-          label: "破爛心情",
+          label: "心态崩了",
           borderColor: moodColors.bad.border,
           backgroundColor: moodColors.bad.bg,
           fill: true,
           tension: 0.4,
         },
         {
-          label: "職場霸凌",
+          label: "职场霸凌",
           borderColor: moodColors.bullying.border,
           backgroundColor: moodColors.bullying.bg,
           fill: true,
@@ -2313,7 +2698,7 @@ function closeModal(modalId) {
 function showRandomQuote() {
   const qd = document.getElementById("quoteDisplay");
   const quotes = [
-    // 35 社畜厭世語錄 from Look Pretty 美日誌 (社畜厭世語錄35選)
+    // 35 社畜压力語錄 from Look Pretty 美日誌 (社畜压力語錄35選)
     "小孩子才做選擇，成年人根本別無選擇。",
     "上班前的我只是經濟有問題，上班後的我連精神都出問題。",
     "18歲的你心情不好可以翹課，25歲的你就算再難過也得七點起床上班。",
@@ -2322,7 +2707,7 @@ function showRandomQuote() {
     "一個人最完美的狀態，就是他在填求職表的時候。",
     "選擇比努力更重要，所以我選擇不努力。",
     "如果你覺得自己累得跟狗一樣，那你真的是誤會了，因為狗都沒你這麼累。",
-    "上班打卡制，下班責任制，人生好厭世。",
+    "上班打卡制，下班責任制，人生好内耗。",
     "準時下班需要的不是努力，是勇氣。",
     "凡事別想得太多，上班已經夠累了。",
     "職場唯一的真相：人不是被炒，而是累死。",
@@ -2347,7 +2732,7 @@ function showRandomQuote() {
     "世界上最短的距離，就是假期開始到結束。",
     "付款不是問題，問題是老闆不給加薪。",
     "我真的很想辭職，可是哪裡能找到更好的？」",
-    // 15 額外語錄 from 聯合新聞網 (15句職場厭世語錄)
+    // 15 額外語錄 from 聯合新聞網 (15句職場压力語錄)
     "工作時別跟我談夢想，我的夢想就是不工作。",
     "不要相信壓力會轉化為動力，你的壓力只會轉化為病歷。",
     "成人的世界，除了長胖，其他都不容易。",
@@ -2409,10 +2794,10 @@ function getShareText() {
     0
   );
   if (count === 0)
-    return `我開始用「離職集點卡」記錄我的社畜人生了，一起來吧！ 厭世指數 ${totalAnnoy}`;
+    return `我開始用「離職集點卡」記錄我的社畜人生了，一起來吧！ 压力指數 ${totalAnnoy}`;
   if (count >= TOTAL_CELLS)
-    return `我集滿 ${TOTAL_CELLS} 點離職點數了！我自由啦！厭世指數 ${totalAnnoy}，快來看看這個有趣的 App！`;
-  return `我的「離職集點卡」進度 ${count}/${TOTAL_CELLS}！厭世指數 ${totalAnnoy}，距離自由又更近一步了！你也來試試看吧！`;
+    return `我集滿 ${TOTAL_CELLS} 點離職點數了！我自由啦！压力指數 ${totalAnnoy}，快來看看這個有趣的 App！`;
+  return `我的「離職集點卡」進度 ${count}/${TOTAL_CELLS}！压力指數 ${totalAnnoy}，距離自由又更近一步了！你也來試試看吧！`;
 }
 
 function setupShareButtons() {
@@ -2425,7 +2810,7 @@ function setupShareButtons() {
     0
   );
   const display = document.getElementById("shareAnnoyanceIndex");
-  if (display) display.textContent = `厭世指數：${totalAnnoy}`;
+  if (display) display.textContent = `压力指數：${totalAnnoy}`;
   document.getElementById("copyLinkBtn").onclick = () =>
     copyToClipboard(text + "\n" + url, document.getElementById("copyLinkBtn"));
   document.getElementById("shareToThreadsBtn").onclick = () =>
@@ -2573,28 +2958,155 @@ function generateAIPrompt() {
     2
   );
 
+  const promptTemplate = `你是一位资深职业心理咨询师和职场教练。
+
+以下是我通过「工人解压卡」记录的近期职场情绪数据，请据此进行专业分析。
+
+## 数据摘要
+- 导出时间：${data.exportDate}
+- 总记录数：${totalRecords} 笔
+- 总压力指数：${totalBurnout}
+- 平均压力指数：${averageBurnout}
+- 时间范围：${timeRange.start || "无"} 至 ${timeRange.end || "无"}
+- 心情分布：
+  - 画饼大师：${moodDistribution.money} 次
+  - 精力透支：${moodDistribution.burnout} 次
+  - 甩锅现场：${moodDistribution.annoying} 次
+  - 原地踏步：${moodDistribution.stuck} 次
+  - 心态崩了：${moodDistribution.bad} 次
+  - 职场霸凌：${moodDistribution.bullying} 次
+
+## 详细数据（JSON）
+\`\`\`json
+${jsonData}
+\`\`\`
+
+## 请按以下结构回复（保持专业、温和但直接，避免空洞鸡汤）：
+
+1. **当前职业内耗评估**  
+   用 1-10 分打分，并简要说明理由。
+
+2. **主要压力源排序**  
+   根据心情分布和近期记录，列出最需要优先处理的 3 个压力源。
+
+3. **情绪模式与趋势**  
+   简要分析是否有明显的情绪模式或时间趋势。
+
+4. **离职参考指数**  
+   给出 1-100 的离职参考指数，并说明主要依据。
+
+5. **未来 30 天可落地行动建议**  
+   提供 3 条具体、可执行的行动建议（每条建议要说清楚「做什么」和「预期效果」）。
+
+请用中文回复。`;
+
+  document.getElementById("ai-prompt-output").value = promptTemplate;
+  document.getElementById(
+    "promptCharCount"
+  ).textContent = `${promptTemplate.length} 字符`;
+
+  // 顯示提示詞區域
+  document.getElementById("aiPromptSection").classList.remove("hidden");
+}
+
+/* function generateAIPrompt() {
+  const data = {
+    exportDate: new Date().toISOString(),
+    records: Array.from(filledDates.values()),
+  };
+
+  const records = data.records;
+  const totalRecords = records.length;
+  const totalBurnout = records.reduce(
+    (sum, record) => sum + (record.annoyanceIndex || 0),
+    0
+  );
+  const averageBurnout =
+    totalRecords > 0 ? (totalBurnout / totalRecords).toFixed(1) : 0;
+
+  // 計算心情分布
+  const moodDistribution = {
+    money: 0,
+    burnout: 0,
+    annoying: 0,
+    stuck: 0,
+    bad: 0,
+    bullying: 0,
+  };
+
+  records.forEach((record) => {
+    if (record.mood && moodDistribution.hasOwnProperty(record.mood)) {
+      moodDistribution[record.mood]++;
+    }
+  });
+
+  // 獲取最近的記錄（最多10筆）
+  const recentEntries = records
+    .sort((a, b) => new Date(b.date) - new Date(a.date))
+    .slice(0, 10)
+    .map((record) => ({
+      date: record.date,
+      mood: getMoodDisplayName(record.mood),
+      description: record.description || "無詳細描述",
+      burnoutScore: record.annoyanceIndex || 0,
+    }));
+
+  const timeRange =
+    records.length > 0
+      ? {
+          start: records.reduce(
+            (min, r) => (r.date < min ? r.date : min),
+            records[0].date
+          ),
+          end: records.reduce(
+            (max, r) => (r.date > max ? r.date : max),
+            records[0].date
+          ),
+        }
+      : { start: "", end: "" };
+
+  const jsonData = JSON.stringify(
+    {
+      exportDate: data.exportDate,
+      totalEntries: totalRecords,
+      totalBurnoutScore: totalBurnout,
+      moodDistribution: {
+        money: moodDistribution.money,
+        burnout: moodDistribution.burnout,
+        annoying: moodDistribution.annoying,
+        stuck: moodDistribution.stuck,
+        bad: moodDistribution.bad,
+        bullying: moodDistribution.bullying,
+      },
+      recentEntries,
+      timeRange,
+    },
+    null,
+    2
+  );
+
   const promptTemplate = `你是一位資深的職涯教練與心理諮詢師。請根據以下 JSON 格式的職場心情日誌，進行深入分析。
 
 ## 分析任務
 請幫我分析我的職場心情日誌，並提供專業建議：
 
 1. **情緒模式分析**：分析我的主要情緒模式和觸發因素
-2. **壓力源識別**：根據厭世指數和描述，找出最大壓力來源
+2. **壓力源識別**：根據压力指數和描述，找出最大壓力來源
 3. **時間趨勢**：分析情緒是否有時間上的變化趨勢
 4. **離職評估**：給出 1-100 的離職建議指數，並說明理由
 5. **改善建議**：提供 3-5 個具體的工作環境改善或職涯規劃建議
 
 ## 數據摘要
 - 總記錄數：${totalRecords} 筆
-- 總厭世指數：${totalBurnout}
-- 平均厭世指數：${averageBurnout}
+- 總压力指數：${totalBurnout}
+- 平均压力指數：${averageBurnout}
 - 心情分布：
-  - 錢途茫茫：${moodDistribution.money} 次
-  - 身心俱疲：${moodDistribution.burnout} 次  
-  - 鳥事一堆：${moodDistribution.annoying} 次
-  - 缺乏成長：${moodDistribution.stuck} 次
-  - 破爛心情：${moodDistribution.bad} 次
-  - 職場霸凌：${moodDistribution.bullying} 次
+  - 画饼大师：${moodDistribution.money} 次
+  - 精力透支：${moodDistribution.burnout} 次  
+  - 甩锅现场：${moodDistribution.annoying} 次
+  - 原地踏步：${moodDistribution.stuck} 次
+  - 心态崩了：${moodDistribution.bad} 次
+  - 职场霸凌：${moodDistribution.bullying} 次
 
 ## 詳細數據
 \`\`\`json
@@ -2610,16 +3122,16 @@ ${jsonData}
 
   // 顯示提示詞區域
   document.getElementById("aiPromptSection").classList.remove("hidden");
-}
+} */
 
 function getMoodDisplayName(mood) {
   const moodNames = {
-    money: "錢途茫茫",
-    burnout: "身心俱疲",
-    annoying: "鳥事一堆",
-    stuck: "缺乏成長",
-    bad: "破爛心情",
-    bullying: "職場霸凌",
+    money: "画饼大师",
+    burnout: "精力透支",
+    annoying: "甩锅现场",
+    stuck: "原地踏步",
+    bad: "心态崩了",
+    bullying: "职场霸凌",
   };
   return moodNames[mood] || mood;
 }
@@ -3173,7 +3685,7 @@ function editRecord(index) {
   document.getElementById("editEventDescription").value =
     record.description || "";
 
-  // 更新厭世分數顯示
+  // 更新压力分數顯示
   updateEditAnnoyanceScore(record.description || "");
 
   // 渲染編輯模態窗的心情圖標
@@ -3270,6 +3782,8 @@ function saveEditedRecord() {
     if (cellElement) {
       fillCell(cellElement, updatedRecord);
     }
+	// ↓↓↓ 新增这一行 ↓↓↓
+	saveMoodEvent(updatedRecord);
 
     // 儲存資料
     saveData();
@@ -3291,4 +3805,43 @@ function saveEditedRecord() {
     console.error("編輯記錄失敗:", error);
     alert("編輯失敗：" + error.message);
   }
+}
+
+// 云同步开关按钮
+/* document.getElementById("cloudSyncBtn")?.addEventListener("click", () => {
+  localStorage.setItem("user_token", "test-token-123");
+  localStorage.setItem("user_id", "usr_test_001");
+  window.USER_TOKEN = "test-token-123";
+  window.USER_ID = "usr_test_001"; */
+  
+  // 更新按钮文字提示已开启
+/*   const btn = document.getElementById("cloudSyncBtn");
+  if (btn) {
+    btn.textContent = "云同步已开启";
+    btn.classList.remove("bg-green-600", "hover:bg-green-700");
+    btn.classList.add("bg-gray-500");
+    btn.disabled = true;
+  }
+  
+  alert("✅ 云同步已开启！\n现在记录的事件会同步到后端。");
+}); */
+
+// ---------- 绑定事件（放在 DOMContentLoaded 里或文件末尾） ----------
+document.getElementById("authOpenBtn")?.addEventListener("click", () => {
+  if (window.USER_TOKEN) {
+    if (confirm("已登录，是否退出？")) logout();
+  } else {
+    openAuthModal();
+  }
+});
+document.getElementById("authModalClose")?.addEventListener("click", closeAuthModal);
+document.getElementById("tabLogin")?.addEventListener("click", () => setAuthMode("login"));
+document.getElementById("tabRegister")?.addEventListener("click", () => setAuthMode("register"));
+document.getElementById("authSubmit")?.addEventListener("click", handleAuthSubmit);
+ 
+// 页面加载时更新按钮状态；若已登录可静默拉取
+updateAuthButton();
+if (window.USER_TOKEN) {
+  // 可选：静默同步
+  // pullCloudEvents();
 }

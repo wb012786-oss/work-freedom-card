@@ -22,7 +22,7 @@ window.API_BASE = "http://localhost:3001"; */
 window.API_BASE =
   location.hostname === "localhost" || location.hostname === "127.0.0.1"
     ? "http://localhost:3001"
-    : "https://你的后端域名.up.railway.app"; // 部署后端后换成真实地址
+    : "https://work-freedom-card-production.up.railway.app"; // 部署后端后换成真实地址
 window.USER_TOKEN = localStorage.getItem("user_token") || null;
 window.USER_ID = localStorage.getItem("user_id") || null;
 // =========================================

@@ -92,7 +92,7 @@ const app = new Hono<{ Variables: { userId: string; token: string } }>();
 app.use(
   "*",
   cors({
-    origin: ["http://localhost:8000", "http://127.0.0.1:8000", "http://localhost:3000", "https://work-freedom-card.wb012786.workers.dev", "https://你的前端域名.vercel.app"],
+    origin: ["http://localhost:8000", "http://127.0.0.1:8000", "http://localhost:3000", "https://work-freedom-card.pages.dev"],
     allowMethods: ["GET", "POST", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization"],
   })

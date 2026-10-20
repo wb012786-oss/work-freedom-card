@@ -1,18 +1,5 @@
 import { Hono } from "hono";
 import { serve } from "@hono/node-server";
-
-const port = Number(process.env.PORT) || 3001;
-
-serve(
-  {
-    fetch: app.fetch,
-    port,
-  },
-  (info) => {
-    console.log(`Server is running on port ${info.port}`);
-  }
-);
-
 import { cors } from "hono/cors";
 import { randomUUID, randomBytes } from "crypto";
 import bcrypt from "bcryptjs";
@@ -313,6 +300,17 @@ app.get("/api/v1/mood/stats", async (c) => {
 // 微信登录预留
 // app.post("/api/v1/auth/wechat", ...)
 
-const port = 3001;
-console.log(`社畜解放卡后端已启动：http://localhost:${port}`);
-serve({ fetch: app.fetch, port });
+const port = Number(process.env.PORT) || 3001;
+
+serve(
+  {
+    fetch: app.fetch,
+    port,
+  },
+  (info) => {
+    console.log(`Server is running on port ${info.port}`);
+  }
+);
+//const port = 3001;
+//console.log(`社畜解放卡后端已启动：http://localhost:${port}`);
+//serve({ fetch: app.fetch, port });

@@ -1,5 +1,18 @@
 import { Hono } from "hono";
 import { serve } from "@hono/node-server";
+
+const port = Number(process.env.PORT) || 3001;
+
+serve(
+  {
+    fetch: app.fetch,
+    port,
+  },
+  (info) => {
+    console.log(`Server is running on port ${info.port}`);
+  }
+);
+
 import { cors } from "hono/cors";
 import { randomUUID, randomBytes } from "crypto";
 import bcrypt from "bcryptjs";

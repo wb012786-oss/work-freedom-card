@@ -267,18 +267,26 @@ async function staleWhileRevalidateStrategy(request, cacheName) {
 
 // 請求攔截
 self.addEventListener("fetch", (event) => {
-  // 只處理 HTTP/HTTPS 請求
-  if (!event.request.url.startsWith("http")) {
-    return;
-  }
+  const req = event.request;
+  const url = new URL(req.url);
 
-  event.respondWith(smartCacheStrategy(event.request));
+  // 非 http(s) 直接忽略
+  if (!req.url.startsWith("http")) return;
+
+  // 跨域（Railway API、CDN、Google 字体等）一律交给浏览器，SW 不拦截
+  if (url.origin !== self.location.origin) return;
+
+  // 本站若误请求 /api/，也不要缓存
+  if (url.pathname.startsWith("/api/")) return;
+
+  // 只缓存同源静态资源
+  event.respondWith(smartCacheStrategy(req));
 });
 
 // 監聽來自客戶端的消息
 self.addEventListener("message", (event) => {
   const { type, data } = event.data || {};
-
+  if(!type) return;
   switch (type) {
     case "SKIP_WAITING":
       // 強制激活新版本

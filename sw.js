@@ -285,7 +285,8 @@ self.addEventListener("fetch", (event) => {
 
 // 監聽來自客戶端的消息
 self.addEventListener("message", (event) => {
-  const { type, data } = event.data || {};
+  const data = event.data || {};
+  const type = data.type;
   if(!type) return;
   switch (type) {
     case "SKIP_WAITING":
